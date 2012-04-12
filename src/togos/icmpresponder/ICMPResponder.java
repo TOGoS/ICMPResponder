@@ -27,23 +27,106 @@ public class ICMPResponder
 		public static void copy( ByteChunk source, byte[] dest, int destOffset ) {
 			copy( source.getBuffer(), source.getOffset(), dest, destOffset, source.getSize() );
 		}
-
+		
 		public static final void encodeInt32( int value, byte[] dest, int destOffset ) {
 			dest[destOffset+0] = (byte)(value >> 24);
 			dest[destOffset+1] = (byte)(value >> 16);
 			dest[destOffset+2] = (byte)(value >>  8);
 			dest[destOffset+3] = (byte)(value >>  0);
 		}
+		
+		public static int decodeInt32( byte[] buffer, int offset ) {
+			return
+				((buffer[offset + 0]&0xFF) << 24) |
+				((buffer[offset + 1]&0xFF) << 16) |
+				((buffer[offset + 2]&0xFF) <<  8) |
+				((buffer[offset + 3]&0xFF) <<  0);
+		}
+		
+		public static int decodeInt16( byte[] buffer, int offset ) {
+			return
+				((buffer[offset + 0]&0xFF) << 8) |
+				((buffer[offset + 1]&0xFF) << 0);
+		}
+		
+		//// Functions for getting values but doing bounds-checking first ////
+		
+		/**
+		 * Ensures that a buffer of length bufferSize can contain a sub-buffer
+		 * of length valueSize at valueOffset. 
+		 */
+		protected static void ensureAllocated( int bufferSize, int valueOffset, int valueSize, String role ) {
+			if( valueOffset < 0 ) {
+				throw new IndexOutOfBoundsException( "Cannot read/write "+role+" ("+valueSize+" bytes at "+valueOffset+") because the offset is < 0!" );
+			}
+			if( valueOffset+valueSize > bufferSize ) {
+				throw new IndexOutOfBoundsException( "Cannot read/write "+role+" ("+valueSize+" bytes at "+valueOffset+") because it is outside of allocated memory ("+bufferSize+" bytes)" );
+			}
+		}
+				
+		protected static int getInt32( byte[] chunk, int chunkOffset, int chunkLength, int valueOffset, String role ) {
+			ensureAllocated( chunkLength, valueOffset, 4, role );
+			return decodeInt32( chunk, chunkOffset+valueOffset );
+		}
+		
+		protected static int getInt16( byte[] chunk, int chunkOffset, int chunkLength, int valueOffset, String role ) {
+			ensureAllocated( chunkLength, valueOffset, 2, role );
+			return decodeInt16( chunk, chunkOffset+valueOffset );
+		}
+		
+		protected static int getInt8( byte[] chunk, int chunkOffset, int chunkLength, int valueOffset, String role ) {
+			ensureAllocated( chunkLength, valueOffset, 1, role );
+			return chunk[chunkOffset+valueOffset]&0xFF;
+		}
 	}
 	
 	static class PacketUtil {
-		public static long calculateIcmp6Checksum( IP6Packet p ) {
-			byte[] data = new byte[40+p.getPayloadLength()];
-			ByteUtil.copy( p.getSourceAddress(), data, 0 );
-			ByteUtil.copy( p.getDestinationAddress(), data, 16 );
-			ByteUtil.encodeInt32( p.getPayloadLength(), data, 32 );
-			ByteUtil.encodeInt32( p.getProtocolNumber(), data, 36 );
-			ByteUtil.copy( p.getPayload(), data, 40 );
+		public static int getIp6PayloadLength( byte[] packet, int packetOffset, int packetSize ) {
+			return ByteUtil.getInt16( packet, packetOffset, packetSize, 4, "IP6 payload length" );
+		}
+		
+		public static int getValidatedIp6PayloadLength( byte[] packet, int packetOffset, int packetSize ) {
+			int len = getIp6PayloadLength(packet, packetOffset, packetSize);
+			if( len < 0 ) throw new IndexOutOfBoundsException("Packet's payload length is < 0: "+len);
+			if( len + 40 > packetSize ) throw new IndexOutOfBoundsException("Packet's payload length is too large for packet of size "+packetSize+": "+len);
+			return len;
+		}
+		
+		public static int getIpVersion( byte[] packet, int packetOffset, int packetSize ) {
+			return (ByteUtil.getInt8( packet, packetOffset, packetSize, 0, "IP version" ) >> 4) & 0xF;
+		}
+		
+		public static int getIp6TrafficClass( byte[] packet, int packetOffset, int packetSize ) {
+			return (ByteUtil.getInt32( packet, packetOffset, packetSize, 0, "IP6 version/class/flags") >> 20) & 0xFF;
+		}
+		
+		public static int getIp6ProtocolNumber( byte[] packet, int packetOffset, int packetSize ) {
+			return ByteUtil.getInt8( packet, packetOffset, packetSize, 6, "IP6 next header / protocol number" );
+		}
+		
+		public static void copyIp6SourceAddress( byte[] packet, int packetOffset, int packetSize, byte[] dest, int destOffset ) {
+			ByteUtil.ensureAllocated( packetSize, 8, 16, "IP6 source address" );
+			ByteUtil.copy( packet, packetOffset+8, dest, destOffset, 16);
+		}
+		
+		public static void copyIp6DestinationAddress( byte[] packet, int packetOffset, int packetSize, byte[] dest, int destOffset ) {
+			ByteUtil.ensureAllocated( packetSize, 24, 16, "IP6 destination address" );
+			ByteUtil.copy( packet, packetOffset+24, dest, destOffset, 16);
+		}
+		
+		public static int getIp6PayloadOffset( int packetOffset ) {
+			return packetOffset + 40;
+		}
+		
+		public static long calculateIcmp6Checksum( byte[] packet, int offset, int size ) {
+			int payloadLength = getValidatedIp6PayloadLength( packet, offset, size );
+			
+			byte[] data = new byte[40+payloadLength];
+			copyIp6SourceAddress(      packet, offset, size, data,  0 );
+			copyIp6DestinationAddress( packet, offset, size, data, 16 );
+			ByteUtil.encodeInt32(             payloadLength, data, 32 );
+			ByteUtil.encodeInt32( getIp6ProtocolNumber( packet, offset, size ), data, 36 );
+			ByteUtil.copy( packet, getIp6PayloadOffset(offset), data, 40, payloadLength );
 			return InternetChecksum.checksum( data );
 		}
 		
@@ -53,23 +136,28 @@ public class ICMPResponder
 			ps.println( "    ICMP checksum: "+icmp.getIcmpChecksum() );
 		}
 		
-		protected static void dumpIcmp6Data( ByteChunk c, PrintStream ps ) {
-			if( c.getSize() < 4 ) {
+		protected static void dumpIcmp6Data( byte[] buffer, int offset, int size, PrintStream ps ) {
+			if( size < 4 ) {
 				ps.println("  Seems to be an invalid ICMPv6 packet (not long enough)");
 			}
-			dumpIcmp6Data( new ICMPMessage( c.getBuffer(), c.getOffset(), c.getSize() ), ps );
+			dumpIcmp6Data( new ICMPMessage( buffer, offset, size ), ps );
 		}
 		
 		protected static void dumpIp6Packet( IP6Packet p, PrintStream ps ) {
-			ps.println( "  traffic class: " + p.getTrafficClass() );
-			ps.println( "  protocol number: " + p.getProtocolNumber() );
+			byte[] packet = p.getBuffer();
+			int offset = p.getOffset();
+			int size = p.getSize();
+			
+			ps.println( "  payload length: " + getIp6PayloadLength(packet, offset, size) );
+			ps.println( "  traffic class: " + getIp6TrafficClass(packet, offset, size) );
+			ps.println( "  protocol number: " + getIp6ProtocolNumber(packet, offset, size) );
 			
 			switch( p.getProtocolNumber() ) {
 			case( 58 ):
-				dumpIcmp6Data( p.getPayload(), ps );
+				dumpIcmp6Data( packet, getIp6PayloadOffset(offset), getValidatedIp6PayloadLength(packet,offset,size), ps );
 			}
 			
-			ps.println( "    calculated ICMPv6 checksum: "+calculateIcmp6Checksum(p) );
+			ps.println( "    calculated ICMPv6 checksum: "+calculateIcmp6Checksum(packet, offset, size) );
 		}
 		
 		public static void dumpPacket( IPPacket p, PrintStream ps ) {
@@ -308,10 +396,6 @@ public class ICMPResponder
 			setInt32( 0, vcf, "IP6 version/class/flags" );
 		}
 		
-		public int getPayloadLength() {
-			return getInt16(4, "IP6 payload length");
-		}
-		
 		// a.k.a. next header
 		public int getProtocolNumber() {
 			return getInt8(6, "IP6 next header type");
@@ -336,7 +420,7 @@ public class ICMPResponder
 		}
 		
 		public StructuredByteChunk getPayload() {
-			int len = getPayloadLength();
+			int len = PacketUtil.getIp6PayloadLength( buffer, offset, size );
 			if( len < 0 || len > (getSize()-40) ) {
 				throw new IndexOutOfBoundsException("Payload length is out of range 0.."+(getSize()-40)+": "+len);
 			}
@@ -462,7 +546,7 @@ public class ICMPResponder
 			pong.setDestinationAddress( pingPacket.getSourceAddress() );
 			pong.getPayload().setInt8(0, 129, "ICMP message type");
 			pong.getPayload().setInt16(2, 0, "ICMP checksum");
-			pong.getPayload().setInt16(2, (short)PacketUtil.calculateIcmp6Checksum(pong), "ICMP checksum");
+			pong.getPayload().setInt16(2, (short)PacketUtil.calculateIcmp6Checksum(pong.getBuffer(), pong.getOffset(), pong.getSize()), "ICMP checksum");
 			return pong;
 		}
 		

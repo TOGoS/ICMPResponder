@@ -27,7 +27,7 @@ public class ICMPResponder
 		public static void copy( ByteChunk source, byte[] dest, int destOffset ) {
 			copy( source.getBuffer(), source.getOffset(), dest, destOffset, source.getSize() );
 		}
-		
+
 		public static final void encodeInt32( int value, byte[] dest, int destOffset ) {
 			dest[destOffset+0] = (byte)(value >> 24);
 			dest[destOffset+1] = (byte)(value >> 16);
@@ -38,7 +38,8 @@ public class ICMPResponder
 	
 	static class PacketUtil {
 		public static long calculateIcmp6Checksum( IP6Packet p ) {
-			byte[] data = new byte[40+p.getPayloadLength()];			ByteUtil.copy( p.getSourceAddress(), data, 0 );
+			byte[] data = new byte[40+p.getPayloadLength()];
+			ByteUtil.copy( p.getSourceAddress(), data, 0 );
 			ByteUtil.copy( p.getDestinationAddress(), data, 16 );
 			ByteUtil.encodeInt32( p.getPayloadLength(), data, 32 );
 			ByteUtil.encodeInt32( p.getProtocolNumber(), data, 36 );
@@ -116,7 +117,7 @@ public class ICMPResponder
 		}
 		
 		protected void ensureAllocated( int offset, int size, String role ) {
-			if( this.offset+offset+size > this.size ) {
+			if( offset+size > this.size ) {
 				throw new IndexOutOfBoundsException( "Cannot read/write "+role+" ("+size+" bytes at "+offset+") because it is outside of allocated memory ("+this.size+" bytes)" );
 			}
 		}
@@ -253,7 +254,7 @@ public class ICMPResponder
 		public int getFlags() {
 			return getInt4(6, 4, "IP4 flags");
 		}
-
+		
 		public int getFragmentOffset() {
 			return getInt12(6, 0, "IP4 fragment offset");
 		}
@@ -339,6 +340,7 @@ public class ICMPResponder
 			if( len < 0 || len > (getSize()-40) ) {
 				throw new IndexOutOfBoundsException("Payload length is out of range 0.."+(getSize()-40)+": "+len);
 			}
+			ensureAllocated( 40, len, "IP6 payload" );
 			return new StructuredByteChunk( buffer, offset+40, len );
 		}
 	}

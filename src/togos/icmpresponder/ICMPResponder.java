@@ -9,6 +9,11 @@ import java.net.SocketAddress;
 import togos.blob.ByteChunk;
 import togos.blob.SimpleByteChunk;
 
+/**
+ * Demonstrates parsing IPv6 headers and ICMP echo requests and responding to
+ * them. IP packets must be encapsulated in UDP packets and sent to the port
+ * that ICMPResponder listens on, e.g. by TUN2UDP -tun -no-pi
+ */
 public class ICMPResponder
 {
 	static class ByteUtil {

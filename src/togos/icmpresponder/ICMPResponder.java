@@ -81,6 +81,9 @@ public class ICMPResponder
 	}
 	
 	static class PacketUtil {
+		public static final int IP6_HEADER_SIZE = 40;
+		public static final int ICMP_HEADER_SIZE = 8;
+		
 		public static int getIp6PayloadLength( byte[] packet, int packetOffset, int packetSize ) {
 			return ByteUtil.getInt16( packet, packetOffset, packetSize, 4, "IP6 payload length" );
 		}
@@ -96,8 +99,8 @@ public class ICMPResponder
 			return (ByteUtil.getInt8( packet, packetOffset, packetSize, 0, "IP version" ) >> 4) & 0xF;
 		}
 		
-		public static int getIp6TrafficClass( byte[] packet, int packetOffset, int packetSize ) {
-			return (ByteUtil.getInt32( packet, packetOffset, packetSize, 0, "IP6 version/class/flags") >> 20) & 0xFF;
+		public static int getIp6TrafficClass( byte[] packet, int packetOffset ) {
+			return (ByteUtil.decodeInt32( packet, packetOffset+0) >> 20) & 0xFF;
 		}
 		
 		public static int getIp6ProtocolNumber( byte[] packet, int packetOffset, int packetSize ) {
@@ -130,29 +133,26 @@ public class ICMPResponder
 			return InternetChecksum.checksum( data );
 		}
 		
-		protected static void dumpIcmp6Data( ICMPMessage icmp, PrintStream ps ) {
-			ps.println( "    ICMP message type: "+icmp.getIcmpMessageType() );
-			ps.println( "    ICMP code: "+icmp.getIcmpCode() );
-			ps.println( "    ICMP checksum: "+icmp.getIcmpChecksum() );
+		protected static void dumpIcmp6Data( byte[] icmpMessage, int offset, int size, PrintStream ps ) {
+			ByteUtil.ensureAllocated( size, 0, ICMP_HEADER_SIZE, "ICMP header" );
+			
+			ps.println( "    ICMP message type: "+(icmpMessage[offset]&0xFF) );
+			ps.println( "    ICMP code: "+(icmpMessage[offset+1]&0xFF) );
+			ps.println( "    ICMP checksum: "+ByteUtil.decodeInt16( icmpMessage, offset+2 ) );
 		}
 		
-		protected static void dumpIcmp6Data( byte[] buffer, int offset, int size, PrintStream ps ) {
-			if( size < 4 ) {
-				ps.println("  Seems to be an invalid ICMPv6 packet (not long enough)");
-			}
-			dumpIcmp6Data( new ICMPMessage( buffer, offset, size ), ps );
-		}
-		
-		protected static void dumpIp6Packet( IP6Packet p, PrintStream ps ) {
-			byte[] packet = p.getBuffer();
-			int offset = p.getOffset();
-			int size = p.getSize();
+		protected static void dumpIp6Packet( byte[] packet, int offset, int size, PrintStream ps ) {
+			ByteUtil.ensureAllocated( size, 0, IP6_HEADER_SIZE, "IP6 header" );
 			
-			ps.println( "  payload length: " + getIp6PayloadLength(packet, offset, size) );
-			ps.println( "  traffic class: " + getIp6TrafficClass(packet, offset, size) );
-			ps.println( "  protocol number: " + getIp6ProtocolNumber(packet, offset, size) );
+			ps.println("IPv6 packet");
+			ps.println("  from: "+AddressUtil.formatIp6Address(packet, 8));
+			ps.println("  to:   "+AddressUtil.formatIp6Address(packet, 24));
+			ps.println("  hoplimit: "+(packet[offset+7] & 0xFF));
+			ps.println("  payload length: " + ByteUtil.decodeInt16(packet, offset+4) );
+			ps.println("  traffic class: " + getIp6TrafficClass(packet, offset) );
+			ps.println("  protocol number: " + getIp6ProtocolNumber(packet, offset, size) );
 			
-			switch( p.getProtocolNumber() ) {
+			switch( packet[offset+8] & 0xFF ) {
 			case( 58 ):
 				dumpIcmp6Data( packet, getIp6PayloadOffset(offset), getValidatedIp6PayloadLength(packet,offset,size), ps );
 			}
@@ -160,25 +160,18 @@ public class ICMPResponder
 			ps.println( "    calculated ICMPv6 checksum: "+calculateIcmp6Checksum(packet, offset, size) );
 		}
 		
-		public static void dumpPacket( IPPacket p, PrintStream ps ) {
-			ps.println("Packet v"+p.getIpVersion());
-			ps.println("  from: "+AddressUtil.formatIpAddress(p.getSourceAddress()));
-			ps.println("  to:   "+AddressUtil.formatIpAddress(p.getDestinationAddress()));
-			ps.println("  hoplimit: "+p.getHopLimit());
-			switch( p.getIpVersion() ) {
-			case( 6 ): dumpIp6Packet( (IP6Packet)p, ps ); 
+		public static void dumpPacket( byte[] packet, int offset, int length, PrintStream ps ) {
+			switch( (packet[offset+0] >> 4) & 0xF ) {
+			case( 6 ): dumpIp6Packet( packet, offset, length, ps ); 
 			}
 		}
 	}
 	
 	static class AddressUtil {
-		public static String formatIp6Address( ByteChunk addy ) {
-			byte[] addyBuf = addy.getBuffer();
-			int offset = addy.getOffset();
-			
+		public static String formatIp6Address( byte[] addy, int offset ) {
 			int[] parts = new int[8];
 			for( int i=0; i<8; ++i ) {
-				parts[i] = ((addyBuf[offset+i*2]&0xFF) << 8) | (addyBuf[offset+i*2+1]&0xFF);
+				parts[i] = ((addy[offset+i*2]&0xFF) << 8) | (addy[offset+i*2+1]&0xFF);
 			}
 			String rez = "";
 			for( int i=0; i<8; ++i ) {
@@ -186,13 +179,6 @@ public class ICMPResponder
 				rez += Integer.toHexString(parts[i]);
 			}
 			return rez;
-		}
-		
-		public static String formatIpAddress( ByteChunk addy ) {
-			switch( addy.getSize() ) {
-			case( 16 ): return formatIp6Address( addy );
-			default: return "(unrecognised IP address length: "+addy.getSize()+" bytes)";
-			}
 		}
 	}
 	
@@ -518,7 +504,7 @@ public class ICMPResponder
 				IPPacket p = IPPacket.parse(c);
 				
 				System.err.print( "Received packet: " );
-				PacketUtil.dumpPacket(p, System.err);
+				PacketUtil.dumpPacket(p.getBuffer(), p.getOffset(), p.getSize(), System.err);
 				
 				if( p != null ) return p;
 			}
@@ -526,7 +512,7 @@ public class ICMPResponder
 		
 		public void send(IPPacket p) {
 			System.err.print( "Sending packet: " );
-			PacketUtil.dumpPacket(p, System.err);
+			PacketUtil.dumpPacket(p.getBuffer(), p.getOffset(), p.getSize(), System.err);
 			pio.send(p);
 		}
 	}

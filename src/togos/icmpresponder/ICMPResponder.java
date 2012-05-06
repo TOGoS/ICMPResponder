@@ -16,60 +16,6 @@ import togos.blob.SimpleByteChunk;
  */
 public class ICMPResponder
 {
-	static class ByteUtil {
-		public static void copy( byte[] source, int sourceOffset, byte[] dest, int destOffset, int length ) {
-			while( length > 0 ) {
-				dest[destOffset++] = source[sourceOffset++];
-				--length;
-			}
-		}
-		
-		public static void copy( ByteChunk source, byte[] dest, int destOffset ) {
-			copy( source.getBuffer(), source.getOffset(), dest, destOffset, source.getSize() );
-		}
-		
-		public static final void encodeInt32( int value, byte[] dest, int destOffset ) {
-			dest[destOffset+0] = (byte)(value >> 24);
-			dest[destOffset+1] = (byte)(value >> 16);
-			dest[destOffset+2] = (byte)(value >>  8);
-			dest[destOffset+3] = (byte)(value >>  0);
-		}
-		
-		public static int decodeInt32( byte[] buffer, int offset ) {
-			return
-				((buffer[offset + 0]&0xFF) << 24) |
-				((buffer[offset + 1]&0xFF) << 16) |
-				((buffer[offset + 2]&0xFF) <<  8) |
-				((buffer[offset + 3]&0xFF) <<  0);
-		}
-		
-		public static void encodeInt16( int value, byte[] buffer, int offset ) {
-			buffer[offset+0] = (byte)(value >> 8);
-			buffer[offset+1] = (byte)(value >> 0);
-		}
-		
-		public static int decodeInt16( byte[] buffer, int offset ) {
-			return
-				((buffer[offset + 0]&0xFF) << 8) |
-				((buffer[offset + 1]&0xFF) << 0);
-		}
-		
-		//// Functions for getting values but doing bounds-checking first ////
-		
-		/**
-		 * Ensures that a buffer of length bufferSize can contain a sub-buffer
-		 * of length valueSize at valueOffset. 
-		 */
-		protected static void ensureRoom( int bufferSize, int valueOffset, int valueSize, String role ) {
-			if( valueOffset < 0 ) {
-				throw new IndexOutOfBoundsException( "Cannot read/write "+role+" ("+valueSize+" bytes at "+valueOffset+") because the offset is < 0!" );
-			}
-			if( valueOffset+valueSize > bufferSize ) {
-				throw new IndexOutOfBoundsException( "Cannot read/write "+role+" ("+valueSize+" bytes at "+valueOffset+") because it is outside of allocated memory ("+bufferSize+" bytes)" );
-			}
-		}
-	}
-	
 	static class PacketUtil {
 		
 		// Based on
@@ -81,7 +27,7 @@ public class ICMPResponder
 		public static final int ICMP_HEADER_SIZE = 8;
 		
 		public static int getIp6PayloadLength( byte[] packet, int packetOffset ) {
-			return ByteUtil.decodeInt16( packet, packetOffset + 4 );
+			return ByteUtil.decodeUInt16( packet, packetOffset + 4 );
 		}
 		
 		public static int getValidatedIp6PayloadLength( byte[] packet, int packetOffset, int packetSize ) {
@@ -124,7 +70,7 @@ public class ICMPResponder
 			
 			ps.println( "    ICMP message type: "+(icmpMessage[offset]&0xFF) );
 			ps.println( "    ICMP code: "+(icmpMessage[offset+1]&0xFF) );
-			ps.println( "    ICMP checksum: "+ByteUtil.decodeInt16( icmpMessage, offset+2 ) );
+			ps.println( "    ICMP checksum: "+ByteUtil.decodeUInt16( icmpMessage, offset+2 ) );
 		}
 		
 		protected static void dumpIp6Packet( byte[] packet, int offset, int size, PrintStream ps ) {
@@ -134,7 +80,7 @@ public class ICMPResponder
 			ps.println("  from: "+AddressUtil.formatIp6Address(packet, 8));
 			ps.println("  to:   "+AddressUtil.formatIp6Address(packet, 24));
 			ps.println("  hoplimit: "+(packet[offset+7] & 0xFF));
-			ps.println("  payload length: " + ByteUtil.decodeInt16(packet, offset+4) );
+			ps.println("  payload length: " + ByteUtil.decodeUInt16(packet, offset+4) );
 			ps.println("  traffic class: " + getIp6TrafficClass(packet, offset) );
 			ps.println("  protocol number: " + getIp6ProtocolNumber(packet, offset) );
 			
@@ -273,10 +219,28 @@ public class ICMPResponder
 			}
 		}
 		
+		protected void handleTcpPacket( byte[] packet, int offset, int size ) {
+			if( size < 20 ) return;
+			
+			int dataOffset = 4 * (packet[offset+12] >> 4)  & 0xF;
+			if( dataOffset > size ) return;
+			
+			int sourcePort = ByteUtil.decodeUInt16( packet, offset +  0 );
+			int destPort   = ByteUtil.decodeUInt16( packet, offset +  2 );
+			int seqNum     = ByteUtil.decodeInt32(  packet, offset +  4 );
+			int ackNum     = ByteUtil.decodeInt32(  packet, offset +  8 );
+			int flags      = ByteUtil.decodeUInt16( packet, offset + 12 ) & 0xFFF;
+		}
+		
 		public void handleIp6( byte[] packet, int offset, int size ) {
-			switch( PacketUtil.getIp6ProtocolNumber(packet, offset) ) {
+			int protNum = PacketUtil.getIp6ProtocolNumber(packet, offset);
+			switch( protNum ) {
 			case( 58 ): // ICMPv6
 				handleIcmp6Packet( packet, offset, size ); break;
+			case( 6 ):
+				handleTcpPacket( packet, offset + PacketUtil.IP6_HEADER_SIZE, size - PacketUtil.IP6_HEADER_SIZE );
+			default:
+				System.err.println("whoop, got packet with procol number "+protNum);
 			}
 		}
 		

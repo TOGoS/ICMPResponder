@@ -7,6 +7,7 @@ import java.util.Iterator;
 
 import togos.blob.ByteChunk;
 
+@SuppressWarnings("rawtypes")
 public class ByteBlobInputStream extends InputStream
 {
 	Iterator chunks;

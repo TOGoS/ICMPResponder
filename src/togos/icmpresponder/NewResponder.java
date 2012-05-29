@@ -5,13 +5,14 @@ import java.io.PrintStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketAddress;
+import java.util.Random;
 
 import togos.blob.ByteChunk;
 import togos.icmpresponder.ICMPResponder.AddressUtil;
-import togos.icmpresponder.ICMPResponder.PacketUtil;
 import togos.icmpresponder.packet.ICMP6Message;
 import togos.icmpresponder.packet.IP6Packet;
 import togos.icmpresponder.packet.IPPacket;
+import togos.icmpresponder.packet.TCPMessage;
 
 public class NewResponder
 {
@@ -50,7 +51,14 @@ public class NewResponder
 			out.println("    Payload size: "+m.getPayloadSize());
 			out.println("    Checksum: "+m.icmpChecksum );
 			if( m.ipPacket instanceof IP6Packet ) {
-				System.err.println("    Calculated checksum: "+ICMP6Message.calculateIcmp6Checksum( (IP6Packet)m.ipPacket ));
+				out.println("    Calculated checksum: "+ICMP6Message.calculateIcmp6Checksum( (IP6Packet)m.ipPacket ));
+			}
+		case( 6 ):
+			TCPMessage tm = TCPMessage.parse( p );
+			out.println( "  "+tm.toString() );
+			if( tm.ipPacket instanceof IP6Packet ) {
+				out.println("    Calculated checksum: "+ICMP6Message.calculateIcmp6Checksum( (IP6Packet)tm.ipPacket ));
+				out.println("    Calculated checksum 2: "+TCPMessage.calculateChecksum( tm ));
 			}
 		}
 	}
@@ -72,6 +80,28 @@ public class NewResponder
 		dumpPacket( p, System.err );
 		
 		switch( p.getPayloadProtocolNumber() ) {
+		case( 6 ):
+			TCPMessage tm = TCPMessage.parse( p );
+			
+			if( (tm.flags & TCPFlags.RST) != 0 ) {
+				System.err.println("Connection reset!");
+				System.exit(1);
+			}
+			
+			if( tm.ipPacket instanceof IP6Packet ) {
+				IP6Packet ip6 = (IP6Packet)tm.ipPacket;
+				
+				switch( tm.flags ) {
+				case( TCPFlags.SYN ):
+					TCPMessage synAck = TCPMessage.createV6(
+						ip6.buffer, ip6.getDestinationAddressOffset(), tm.destPort,
+						ip6.buffer, ip6.getSourceAddressOffset(), tm.sourcePort,
+						new Random().nextInt(), tm.sequenceNumber+1,
+						TCPFlags.SYN|TCPFlags.ACK, 16384,
+						ByteUtil.EMPTY_BTYE_ARRAY, 0, 0 );
+					tryReply( synAck.ipPacket );
+				}
+			}
 		case( 58 ):
 			ICMP6Message m = ICMP6Message.parse( p );
 			if( m.icmpMessageType == 128 ) {
@@ -89,14 +119,16 @@ public class NewResponder
 	
 	public void run() throws IOException {
 		byte[] recvBuffer = new byte[2048];
-		DatagramPacket p = new DatagramPacket( recvBuffer, 2048 );
-		dgs.receive(p);
-		lastReceivedFrom = p.getSocketAddress();
-		byte[] packetBuffer = new byte[p.getLength()];
-		for( int i=packetBuffer.length-1; i>=0; --i ) {
-			packetBuffer[i] = recvBuffer[i];
+		while( true ) {
+			DatagramPacket p = new DatagramPacket( recvBuffer, 2048 );
+			dgs.receive(p);
+			lastReceivedFrom = p.getSocketAddress();
+			byte[] packetBuffer = new byte[p.getLength()];
+			for( int i=packetBuffer.length-1; i>=0; --i ) {
+				packetBuffer[i] = recvBuffer[i];
+			}
+			handlePacket( IPPacket.parse( packetBuffer, 0, packetBuffer.length ) );
 		}
-		handlePacket( IPPacket.parse( packetBuffer, 0, packetBuffer.length ) );
 	}
 	
 	public static void main( String[] args ) throws Exception {

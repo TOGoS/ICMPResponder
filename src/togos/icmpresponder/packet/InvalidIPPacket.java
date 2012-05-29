@@ -1,6 +1,5 @@
-package togos.icmpresponder;
+package togos.icmpresponder.packet;
 
-import togos.icmpresponder.packet.IPPacket;
 
 public class InvalidIPPacket extends IPPacket
 {

@@ -1,7 +1,6 @@
 package togos.icmpresponder.packet;
 
 import togos.icmpresponder.ByteUtil;
-import togos.icmpresponder.InvalidIPPacket;
 
 public class IP6Packet extends IPPacket
 {

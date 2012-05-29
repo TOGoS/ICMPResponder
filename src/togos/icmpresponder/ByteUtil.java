@@ -3,6 +3,8 @@ package togos.icmpresponder;
 import togos.blob.ByteChunk;
 
 public class ByteUtil {
+	public static final byte[] EMPTY_BTYE_ARRAY = new byte[0];
+	
 	public static void copy( byte[] source, int sourceOffset, byte[] dest, int destOffset, int length ) {
 		while( length > 0 ) {
 			dest[destOffset++] = source[sourceOffset++];

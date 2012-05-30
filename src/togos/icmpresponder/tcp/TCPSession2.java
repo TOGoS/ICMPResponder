@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Random;
 
-import togos.icmpresponder.ByteUtil;
+import togos.blob.util.BlobUtil;
 import togos.icmpresponder.Sink;
 import togos.icmpresponder.packet.TCPSegment;
 
@@ -84,10 +84,18 @@ public class TCPSession2
 			int ackFlags = TCPFlags.ACK;
 			if( sendSyn ) ackFlags |= TCPFlags.SYN;
 			if( sendFin ) ackFlags |= TCPFlags.FIN;
+			
+			// Test output data:
+			// Linux doesn't seem to recognise data in SYN packets.
+			String desc = sendSyn || sendFin ? "" : "data\n";
+			byte[] dat = BlobUtil.bytes(desc);
+			if( dat.length > 0 ) ackFlags |= TCPFlags.PSH;
+			
 			TCPSegment res = TCPSegment.createResponse( s,
 				currentOutgoingSequence, receivedIncomingSequence,
 				ackFlags, 16384,
-				ByteUtil.EMPTY_BTYE_ARRAY, 0, 0
+				//ByteUtil.EMPTY_BTYE_ARRAY, 0, 0
+				dat, 0, dat.length
 			);
 			currentOutgoingSequence += res.getSequenceDelta();
 			return res;

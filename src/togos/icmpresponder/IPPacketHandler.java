@@ -18,14 +18,6 @@ public class IPPacketHandler implements Sink<IPPacket>
 		this.responseSink = responseSink;
 	}
 	
-	protected void tryReply( IPPacket p ) {
-		try {
-			responseSink.give( p );
-		} catch( Exception e ) {
-			System.err.println("Failed to send reply packet: "+e.getMessage());
-		}
-	}
-	
 	protected static void dumpPayload( IPPacket p, PrintStream out ) {
 		switch( p.getPayloadProtocolNumber() ) {
 		case( 58 ):
@@ -60,33 +52,27 @@ public class IPPacketHandler implements Sink<IPPacket>
 		dumpPayload( p, out );
 	}
 	
+	protected void tryReply( IPPacket p ) {
+		try {
+			System.err.print("Sending ");
+			dumpPacket(p, System.err);
+			responseSink.give( p );
+		} catch( Exception e ) {
+			System.err.println("Failed to send reply packet: "+e.getMessage());
+		}
+	}
+	
+	TCPSession tcpSession = new TCPSession(TCPSession.STATE_LISTEN);
+	
 	public void give( IPPacket p ) {
 		System.err.print("Received: ");
 		dumpPacket( p, System.err );
 		
 		switch( p.getPayloadProtocolNumber() ) {
 		case( 6 ):
-			TCPSegment tm = TCPSegment.parse( p );
-			
-			if( (tm.flags & TCPFlags.RST) != 0 ) {
-				System.err.println("Connection reset!");
-				System.exit(1);
-			}
-			
-			if( tm.ipPacket instanceof IP6Packet ) {
-				IP6Packet ip6 = (IP6Packet)tm.ipPacket;
-				
-				switch( tm.flags ) {
-				case( TCPFlags.SYN ):
-					TCPSegment synAck = TCPSegment.createV6(
-						ip6.buffer, ip6.getDestinationAddressOffset(), tm.destPort,
-						ip6.buffer, ip6.getSourceAddressOffset(), tm.sourcePort,
-						new Random().nextInt(), tm.sequenceNumber+1,
-						TCPFlags.SYN|TCPFlags.ACK, 16384,
-						ByteUtil.EMPTY_BTYE_ARRAY, 0, 0 );
-					tryReply( synAck.ipPacket );
-				}
-			}
+			TCPSegment s = TCPSegment.parse( p );
+			TCPSegment r = tcpSession.handleIncomingPacket( s );
+			if( r != null ) tryReply(r.ipPacket);
 		case( 58 ):
 			ICMP6Message m = ICMP6Message.parse( p );
 			if( m.icmpMessageType == 128 ) {

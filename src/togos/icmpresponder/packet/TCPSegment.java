@@ -111,7 +111,24 @@ public class TCPSegment extends SimpleByteChunk
 		
 		return TCPSegment.parse( p );
 	}
-
+	
+	public static TCPSegment createResponse(
+		TCPSegment responseTo,
+		int seqNum, int ackNum, int flags, int windowSize,
+		byte[] dataBuffer, int dataOffset, int dataSize
+	) {
+		IPPacket p = responseTo.ipPacket;
+		if( p instanceof IP6Packet ) {
+			return createV6(
+				p.getBuffer(), p.getDestinationAddressOffset(), responseTo.destPort,
+				p.getBuffer(), p.getSourceAddressOffset(), responseTo.sourcePort,
+				seqNum, ackNum, flags, windowSize,
+				dataBuffer, dataOffset, dataSize
+			);
+		} else {
+			throw new RuntimeException("TCPSegment.createResponse only supports IPv6 for now!");
+		}
+	}
 	
 	public static TCPSegment parse( byte[] buffer, int offset, int size, IPPacket p ) {
 		if( size < 20 ) return new TCPSegment( buffer, offset, size, p, "TCP message size must be >= 20, but is only "+size);

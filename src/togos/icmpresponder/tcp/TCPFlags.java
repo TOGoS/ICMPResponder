@@ -1,4 +1,4 @@
-package togos.icmpresponder;
+package togos.icmpresponder.tcp;
 
 public class TCPFlags
 {

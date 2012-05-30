@@ -1,6 +1,5 @@
 package togos.icmpresponder;
 
-import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketAddress;
@@ -21,7 +20,7 @@ public class NewResponder
 		}
 	});
 	
-	public void run() throws IOException {
+	public void run() throws Exception {
 		byte[] recvBuffer = new byte[2048];
 		while( true ) {
 			DatagramPacket p = new DatagramPacket( recvBuffer, 2048 );

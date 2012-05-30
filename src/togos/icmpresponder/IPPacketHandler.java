@@ -1,14 +1,15 @@
 package togos.icmpresponder;
 
+import java.io.IOException;
 import java.io.PrintStream;
-import java.util.Random;
+import java.io.OutputStream;
 
 import togos.blob.ByteChunk;
-import togos.icmpresponder.ICMPResponder.AddressUtil;
 import togos.icmpresponder.packet.ICMP6Message;
 import togos.icmpresponder.packet.IP6Packet;
 import togos.icmpresponder.packet.IPPacket;
 import togos.icmpresponder.packet.TCPSegment;
+import togos.icmpresponder.tcp.TCPSession2;
 
 public class IPPacketHandler implements Sink<IPPacket>
 {
@@ -62,17 +63,29 @@ public class IPPacketHandler implements Sink<IPPacket>
 		}
 	}
 	
-	TCPSession tcpSession = new TCPSession(TCPSession.STATE_LISTEN);
+	TCPSession2 tcpSession = new TCPSession2( new Sink<TCPSegment>() {
+		public void give(TCPSegment s) {
+			tryReply(s.ipPacket);
+		};
+	}, new OutputStream() {
+		@Override public void write( byte[] buf, int off, int len ) {
+			System.err.print( "Received data: " );
+			System.err.write( buf, off, len );
+			System.err.println();
+		}
+		@Override public void write(int b) throws IOException {
+			write( new byte[]{ (byte)b }, 0, 1 );
+		}
+	});
 	
-	public void give( IPPacket p ) {
+	public void give( IPPacket p ) throws Exception {
 		System.err.print("Received: ");
 		dumpPacket( p, System.err );
 		
 		switch( p.getPayloadProtocolNumber() ) {
 		case( 6 ):
 			TCPSegment s = TCPSegment.parse( p );
-			TCPSegment r = tcpSession.handleIncomingPacket( s );
-			if( r != null ) tryReply(r.ipPacket);
+			tcpSession.handleIncomingPacket( s );
 		case( 58 ):
 			ICMP6Message m = ICMP6Message.parse( p );
 			if( m.icmpMessageType == 128 ) {

@@ -3,6 +3,7 @@ package togos.icmpresponder.packet;
 import togos.blob.SimpleByteChunk;
 import togos.icmpresponder.ByteUtil;
 import togos.icmpresponder.InternetChecksum;
+import togos.icmpresponder.tcp.TCPFlags;
 
 public class TCPSegment extends SimpleByteChunk
 {
@@ -20,10 +21,12 @@ public class TCPSegment extends SimpleByteChunk
 	public int flags;
 	public int windowSize;
 	public int checksum;
-	
+
+	/* Note that these offsets are in *bytes* and are relative to the buffer,
+	 * so are not the same as the numbers given in the packet. */ 
+
 	public int optionsOffset = 0;
 	public int optionsSize = 0;
-	/** Note that this offset is in *bytes*, not 32-bit words as in the actual header data */ 
 	public int dataOffset = 0;
 	public int dataSize = 0;
 	
@@ -168,6 +171,19 @@ public class TCPSegment extends SimpleByteChunk
 			" flags=0x"+Integer.toHexString(flags)+
 			" checksum="+checksum+
 			" payloadSize="+dataSize;
-			
+	}
+	
+	public boolean hasFlag( int flag ) {
+		return (flags & flag) == flag;
+	}
+	
+	public boolean isSyn() { return hasFlag(TCPFlags.SYN); }
+	public boolean isAck() { return hasFlag(TCPFlags.ACK); }
+	public boolean isFin() { return hasFlag(TCPFlags.FIN); }
+	public boolean hasData() { return dataSize > 0; }
+	
+	public int getSequenceDelta() {
+		// TODO: does RST count as one, also?
+		return dataSize + (isSyn() ? 1 : 0) + (isFin() ? 1 : 0);
 	}
 }

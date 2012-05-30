@@ -4,7 +4,7 @@ import togos.blob.SimpleByteChunk;
 import togos.icmpresponder.ByteUtil;
 import togos.icmpresponder.InternetChecksum;
 
-public class TCPMessage extends SimpleByteChunk
+public class TCPSegment extends SimpleByteChunk
 {
 	public static final int TCP_PROTOCOL_NUMBER = 6;
 	public static final int TCP_HEADER_SIZE = 20; // Assuming no options
@@ -26,19 +26,19 @@ public class TCPMessage extends SimpleByteChunk
 	public int payloadOffset = 0;
 	public int payloadSize = 0;
 	
-	public TCPMessage( byte[] data, int offset, int size, IPPacket p, String note ) {
+	public TCPSegment( byte[] data, int offset, int size, IPPacket p, String note ) {
 		super( data, offset, size );
 		this.ipPacket = p;
 		this.wellFormed = false;
 		this.note = note;
 	}
 	
-	public TCPMessage( byte[] data, int offset, int size, IPPacket p ) {
+	public TCPSegment( byte[] data, int offset, int size, IPPacket p ) {
 		super( data, offset, size );
 		this.ipPacket = p;
 	};
 	
-	public TCPMessage( IPPacket p ) {
+	public TCPSegment( IPPacket p ) {
 		this( p.getBuffer(), p.getPayloadOffset(), p.getPayloadSize(), p );
 	}
 	
@@ -49,7 +49,7 @@ public class TCPMessage extends SimpleByteChunk
 	 * It is here as sort of a double-check for my own code and to
 	 * make sure packets are properly formed.
 	 */
-	public static int calculateChecksum( TCPMessage m ) {
+	public static int calculateChecksum( TCPSegment m ) {
 		byte[] checksumBuffer = new byte[60 + m.optionsSize + m.payloadSize];
 		// Not yet implemented for IP4 packets
 		IP6Packet ip6p = (IP6Packet)m.ipPacket;
@@ -68,7 +68,7 @@ public class TCPMessage extends SimpleByteChunk
 		return (int)InternetChecksum.checksum(checksumBuffer);
 	}
 	
-	public static TCPMessage createV6(
+	public static TCPSegment createV6(
 		byte[] sourceAddressBuffer, int sourceAddressOffset, int sourcePort,
 		byte[] destAddressBuffer, int destAddressOffset, int destPort,
 		int seqNum, int ackNum, int flags, int windowSize,
@@ -108,20 +108,20 @@ public class TCPMessage extends SimpleByteChunk
 		
 		ByteUtil.encodeInt16( (short)checksum, data, offset+16 );
 		
-		return TCPMessage.parse( p );
+		return TCPSegment.parse( p );
 	}
 
 	
-	public static TCPMessage parse( byte[] data, int offset, int size, IPPacket p ) {
-		if( size < 20 ) return new TCPMessage( data, offset, size, p, "TCP message size must be >= 20, but is only "+size);
+	public static TCPSegment parse( byte[] data, int offset, int size, IPPacket p ) {
+		if( size < 20 ) return new TCPSegment( data, offset, size, p, "TCP message size must be >= 20, but is only "+size);
 		
-		TCPMessage m = new TCPMessage( data, offset, size, p );
+		TCPSegment m = new TCPSegment( data, offset, size, p );
 		m.sourcePort = ByteUtil.decodeUInt16( data, offset+0 );
 		m.destPort   = ByteUtil.decodeUInt16( data, offset+2 );
 		m.sequenceNumber = ByteUtil.decodeInt32( data, offset+4 );
 		m.ackNumber = ByteUtil.decodeInt32( data, offset+8 );
 		int falgs = ByteUtil.decodeUInt16( data, offset+12 );
-		m.flags = falgs & 0x1FF;
+		m.flags = falgs & 0xFFF;
 		int dataOffset = ((falgs >> 12) & 0xF) << 2;
 		if( dataOffset >= 20 || dataOffset < size ) {
 			m.optionsOffset = offset + 20;
@@ -137,7 +137,7 @@ public class TCPMessage extends SimpleByteChunk
 		return m;
 	}
 	
-	public static TCPMessage parse( IPPacket p ) {
+	public static TCPSegment parse( IPPacket p ) {
 		return parse( p.getBuffer(), p.getPayloadOffset(), p.getPayloadSize(), p );
 	}
 	

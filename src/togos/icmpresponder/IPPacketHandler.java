@@ -8,7 +8,7 @@ import togos.icmpresponder.ICMPResponder.AddressUtil;
 import togos.icmpresponder.packet.ICMP6Message;
 import togos.icmpresponder.packet.IP6Packet;
 import togos.icmpresponder.packet.IPPacket;
-import togos.icmpresponder.packet.TCPMessage;
+import togos.icmpresponder.packet.TCPSegment;
 
 public class IPPacketHandler implements Sink<IPPacket>
 {
@@ -39,11 +39,11 @@ public class IPPacketHandler implements Sink<IPPacket>
 				out.println("    Calculated checksum: "+ICMP6Message.calculateIcmp6Checksum( (IP6Packet)m.ipPacket ));
 			}
 		case( 6 ):
-			TCPMessage tm = TCPMessage.parse( p );
+			TCPSegment tm = TCPSegment.parse( p );
 			out.println( "  "+tm.toString() );
 			if( tm.ipPacket instanceof IP6Packet ) {
 				out.println("    Calculated checksum: "+ICMP6Message.calculateIcmp6Checksum( (IP6Packet)tm.ipPacket ));
-				out.println("    Calculated checksum 2: "+TCPMessage.calculateChecksum( tm ));
+				out.println("    Calculated checksum 2: "+TCPSegment.calculateChecksum( tm ));
 			}
 		}
 	}
@@ -66,7 +66,7 @@ public class IPPacketHandler implements Sink<IPPacket>
 		
 		switch( p.getPayloadProtocolNumber() ) {
 		case( 6 ):
-			TCPMessage tm = TCPMessage.parse( p );
+			TCPSegment tm = TCPSegment.parse( p );
 			
 			if( (tm.flags & TCPFlags.RST) != 0 ) {
 				System.err.println("Connection reset!");
@@ -78,7 +78,7 @@ public class IPPacketHandler implements Sink<IPPacket>
 				
 				switch( tm.flags ) {
 				case( TCPFlags.SYN ):
-					TCPMessage synAck = TCPMessage.createV6(
+					TCPSegment synAck = TCPSegment.createV6(
 						ip6.buffer, ip6.getDestinationAddressOffset(), tm.destPort,
 						ip6.buffer, ip6.getSourceAddressOffset(), tm.sourcePort,
 						new Random().nextInt(), tm.sequenceNumber+1,

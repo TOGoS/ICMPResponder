@@ -112,6 +112,8 @@ public class TCPSegment extends SimpleByteChunk
 		
 		ByteUtil.encodeInt16( (short)checksum, buffer, offset+16 );
 		
+		ByteUtil.copy( dataBuffer, dataOffset, buffer, offset+20, dataSize );
+		
 		return TCPSegment.parse( p );
 	}
 	

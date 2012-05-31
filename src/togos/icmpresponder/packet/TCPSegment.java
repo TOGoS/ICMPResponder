@@ -3,9 +3,10 @@ package togos.icmpresponder.packet;
 import togos.blob.SimpleByteChunk;
 import togos.icmpresponder.ByteUtil;
 import togos.icmpresponder.InternetChecksum;
+import togos.icmpresponder.SocketAddressPair;
 import togos.icmpresponder.tcp.TCPFlags;
 
-public class TCPSegment extends SimpleByteChunk
+public class TCPSegment extends SimpleByteChunk implements SocketAddressPair
 {
 	public static final int TCP_PROTOCOL_NUMBER = 6;
 	public static final int TCP_HEADER_SIZE = 20; // Assuming no options
@@ -72,6 +73,8 @@ public class TCPSegment extends SimpleByteChunk
 		return (int)InternetChecksum.checksum(checksumBuffer);
 	}
 	
+	////
+	
 	public static TCPSegment createV6(
 		byte[] sourceAddressBuffer, int sourceAddressOffset, int sourcePort,
 		byte[] destAddressBuffer, int destAddressOffset, int destPort,
@@ -117,16 +120,30 @@ public class TCPSegment extends SimpleByteChunk
 		return TCPSegment.parse( p );
 	}
 	
-	public static TCPSegment createResponse(
-		TCPSegment responseTo,
+	public static TCPSegment createV6(
+		byte[] sourceAddressBuffer,
+		byte[] destAddressBuffer,
 		int seqNum, int ackNum, int flags, int windowSize,
 		byte[] dataBuffer, int dataOffset, int dataSize
 	) {
-		IPPacket p = responseTo.ipPacket;
-		if( p instanceof IP6Packet ) {
+		return createV6(
+			sourceAddressBuffer, 0, sourceAddressBuffer.length,
+			destAddressBuffer, 0, destAddressBuffer.length,
+			seqNum, ackNum, flags, windowSize,
+			dataBuffer, dataOffset, dataSize
+		);
+	}
+
+	
+	public static TCPSegment create(
+		SocketAddressPair sap,
+		int seqNum, int ackNum, int flags, int windowSize,
+		byte[] dataBuffer, int dataOffset, int dataSize
+	) {
+		if( sap.getIpVersion() == 6 ) {
 			return createV6(
-				p.getBuffer(), p.getDestinationAddressOffset(), responseTo.destPort,
-				p.getBuffer(), p.getSourceAddressOffset(), responseTo.sourcePort,
+				sap.getSourceAddressBuffer(), sap.getSourceAddressOffset(), sap.getSourcePort(),
+				sap.getDestinationAddressBuffer(), sap.getDestinationAddressOffset(), sap.getDestinationPort(),
 				seqNum, ackNum, flags, windowSize,
 				dataBuffer, dataOffset, dataSize
 			);
@@ -134,6 +151,8 @@ public class TCPSegment extends SimpleByteChunk
 			throw new RuntimeException("TCPSegment.createResponse only supports IPv6 for now!");
 		}
 	}
+	
+	////
 	
 	public static TCPSegment parse( byte[] buffer, int offset, int size, IPPacket p ) {
 		if( size < 20 ) return new TCPSegment( buffer, offset, size, p, "TCP message size must be >= 20, but is only "+size);
@@ -187,5 +206,29 @@ public class TCPSegment extends SimpleByteChunk
 	public int getSequenceDelta() {
 		// TODO: does RST count as one, also?
 		return dataSize + (isSyn() ? 1 : 0) + (isFin() ? 1 : 0);
+	}
+	
+	//// SocketAddressPair
+	
+	public int getIpVersion() {
+		return ipPacket.getIpVersion();
+	}
+	public byte[] getDestinationAddressBuffer() {
+		return ipPacket.getBuffer();
+	}
+	public int getDestinationAddressOffset() {
+		return ipPacket.getDestinationAddressOffset();
+	}
+	public int getDestinationPort() {
+		return destPort;
+	}
+	public byte[] getSourceAddressBuffer() {
+		return ipPacket.getBuffer();
+	}
+	public int getSourceAddressOffset() {
+		return ipPacket.getSourceAddressOffset();
+	}
+	public int getSourcePort() {
+		return sourcePort;
 	}
 }

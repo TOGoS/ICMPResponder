@@ -3,6 +3,9 @@ package togos.icmpresponder;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.SocketAddress;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import togos.blob.ByteChunk;
@@ -144,6 +147,27 @@ public class IPPacketHandler implements Sink<IPPacket>
 			}
 			
 			break;
+		}
+	}
+	
+	static SocketAddress lastReceivedFrom = null;
+	public static void main( String[] args ) throws Exception {
+		final DatagramSocket datagramSocket = new DatagramSocket(7777);
+		final IPPacketHandler handler = new IPPacketHandler( new Sink<IPPacket>() {
+			public void give(IPPacket p) throws Exception {
+				datagramSocket.send( new DatagramPacket(p.getBuffer(), p.getOffset(), p.getSize(), lastReceivedFrom) );
+			}
+		});
+		byte[] recvBuffer = new byte[2048];
+		while( true ) {
+			DatagramPacket p = new DatagramPacket( recvBuffer, 2048 );
+			datagramSocket.receive(p);
+			lastReceivedFrom = p.getSocketAddress();
+			byte[] packetBuffer = new byte[p.getLength()];
+			for( int i=packetBuffer.length-1; i>=0; --i ) {
+				packetBuffer[i] = recvBuffer[i];
+			}
+			handler.give( IPPacket.parse( packetBuffer, 0, packetBuffer.length ) );
 		}
 	}
 }

@@ -1,20 +1,16 @@
 package togos.icmpresponder;
 
-import java.io.IOException;
-import java.io.OutputStream;
 import java.io.PrintStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketAddress;
-import java.util.concurrent.LinkedBlockingQueue;
 
 import togos.blob.ByteChunk;
-import togos.blob.SimpleByteChunk;
 import togos.icmpresponder.packet.ICMP6Message;
 import togos.icmpresponder.packet.IP6Packet;
 import togos.icmpresponder.packet.IPPacket;
 import togos.icmpresponder.packet.TCPSegment;
-import togos.icmpresponder.tcp.TCPSession;
+import togos.icmpresponder.tcp.ThreadyTCPServer;
 
 public class IPPacketHandler implements Sink<IPPacket>
 {
@@ -68,7 +64,13 @@ public class IPPacketHandler implements Sink<IPPacket>
 		}
 	}
 	
-	TCPSession activeTcpSession;
+	Sink<IPPacket> outgoingPacketSink = new Sink<IPPacket>() {
+		public void give(IPPacket s) {
+			tryReply(s);
+		};
+	}; 
+	
+	ThreadyTCPServer tcpServer = new ThreadyTCPServer( outgoingPacketSink );
 	
 	public void give( IPPacket p ) throws Exception {
 		System.err.print("Received: ");
@@ -78,63 +80,8 @@ public class IPPacketHandler implements Sink<IPPacket>
 		case( 6 ):
 			TCPSegment s = TCPSegment.parse( p );
 			if( !s.wellFormed ) return;
-			if( s.isSyn() ) {
-				final LinkedBlockingQueue<ByteChunk> echoDat = new LinkedBlockingQueue();
-				final TCPSession tcpSession = new TCPSession( new Sink<TCPSegment>() {
-					public void give(TCPSegment s) {
-						tryReply(s.ipPacket);
-					};
-				}, new OutputStream() {
-					@Override public void write(byte[] b, int off, int len) throws IOException {
-						if( len > 0 ) {
-							try {
-								echoDat.put( new SimpleByteChunk(b, off, len) );
-							} catch( InterruptedException e ) {
-								Thread.currentThread().interrupt();
-								throw new IOException(e);
-							}
-						}
-					}
-					@Override public void write(int b) throws IOException {
-						write( new byte[b], 0, 1 );
-					}
-					@Override
-					public void close() throws IOException {
-						try {
-							echoDat.put( SimpleByteChunk.EMPTY );
-						} catch( InterruptedException e ) {
-							Thread.currentThread().interrupt();
-							throw new IOException(e);
-						}
-					}
-				});
-				new Thread() {
-					public void run() {
-						try {
-							ByteChunk bc;
-							while( (bc = echoDat.take()).getSize() > 0 ) {
-								tcpSession.sendBlocking( bc.getBuffer(), bc.getOffset(), bc.getSize() );
-							}
-						} catch( InterruptedException e ) {
-							Thread.currentThread().interrupt();
-							throw new RuntimeException(e);
-						} catch( Exception e ) {
-							throw new RuntimeException(e);
-						} finally {
-							try {
-								tcpSession.sendFin();
-							} catch( Exception e ) {
-								throw new RuntimeException(e);
-							}
-						}
-						System.err.println("Connection ended!");
-					};
-				}.start();
-				activeTcpSession = tcpSession;
-			}
-			if( activeTcpSession != null ) {
-				activeTcpSession.handleIncomingSegment(s);
-			}
+			tcpServer.handleTcpSegment( s );
+			break;
 		case( 58 ):
 			ICMP6Message m = ICMP6Message.parse( p );
 			if( m.icmpMessageType == 128 ) {

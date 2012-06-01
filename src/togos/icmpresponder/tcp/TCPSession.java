@@ -5,11 +5,16 @@ import java.io.OutputStream;
 import java.util.Random;
 
 import togos.icmpresponder.ByteUtil;
-import togos.icmpresponder.SimpleSocketAddressPair;
 import togos.icmpresponder.Sink;
 import togos.icmpresponder.SocketAddressPair;
 import togos.icmpresponder.packet.TCPSegment;
 
+/**
+ * This class can be used in either a multi-threaded (one thread pushing incoming packets
+ * and another reading them and pushing response data)
+ * @author stevens
+ *
+ */
 public class TCPSession
 {
 	static class OutgoingData {
@@ -70,10 +75,11 @@ public class TCPSession
 	protected synchronized TCPSegment _handleIncomingSegment( TCPSegment s ) throws IOException {
 		boolean sendSyn = false;
 		
-		this.outgoingSocketAddressPair = SimpleSocketAddressPair.inverse( s );
+		this.outgoingSocketAddressPair = s.getInverseAddressPair();
 		
 		if( s.isSyn() && !firstSynReceived ) {
 			firstSynReceived = true;
+			// syn => we are the server (and need to syn+ack back), syn+ack => we are the client 
 			sendSyn = !s.isAck();
 			receivedIncomingSequence = s.sequenceNumber;
 		}
@@ -154,7 +160,12 @@ public class TCPSession
 	}
 	
 	public synchronized void sendBlocking( byte[] buffer, int offset, int size ) throws Exception {
-		while( !send(buffer,offset,size) ) wait();
+		while( size > 0 ) {
+			int sendAmt = size > 1024 ? 1024 : size;
+			while( !send(buffer,offset,sendAmt) ) wait();
+			offset += sendAmt;
+			size -= sendAmt;
+		}
 	}
 	
 	public void sendFin() throws Exception {

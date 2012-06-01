@@ -3,10 +3,11 @@ package togos.icmpresponder.packet;
 import togos.blob.SimpleByteChunk;
 import togos.icmpresponder.ByteUtil;
 import togos.icmpresponder.InternetChecksum;
+import togos.icmpresponder.SimpleSocketAddressPair;
 import togos.icmpresponder.SocketAddressPair;
 import togos.icmpresponder.tcp.TCPFlags;
 
-public class TCPSegment extends SimpleByteChunk implements SocketAddressPair
+public class TCPSegment extends SimpleByteChunk
 {
 	public static final int TCP_PROTOCOL_NUMBER = 6;
 	public static final int TCP_HEADER_SIZE = 20; // Assuming no options
@@ -210,25 +211,21 @@ public class TCPSegment extends SimpleByteChunk implements SocketAddressPair
 	
 	//// SocketAddressPair
 	
-	public int getIpVersion() {
-		return ipPacket.getIpVersion();
+	public SocketAddressPair getSocketAddressPair() {
+		byte[] buffer = ipPacket.getBuffer();
+		return new SimpleSocketAddressPair(
+			ipPacket.getIpVersion(),
+			buffer, ipPacket.getSourceAddressOffset(), sourcePort,
+			buffer, ipPacket.getDestinationAddressOffset(), destPort
+		);
 	}
-	public byte[] getDestinationAddressBuffer() {
-		return ipPacket.getBuffer();
-	}
-	public int getDestinationAddressOffset() {
-		return ipPacket.getDestinationAddressOffset();
-	}
-	public int getDestinationPort() {
-		return destPort;
-	}
-	public byte[] getSourceAddressBuffer() {
-		return ipPacket.getBuffer();
-	}
-	public int getSourceAddressOffset() {
-		return ipPacket.getSourceAddressOffset();
-	}
-	public int getSourcePort() {
-		return sourcePort;
+	
+	public SocketAddressPair getInverseAddressPair() {
+		byte[] buffer = ipPacket.getBuffer();
+		return new SimpleSocketAddressPair(
+			ipPacket.getIpVersion(),
+			buffer, ipPacket.getDestinationAddressOffset(), destPort,
+			buffer, ipPacket.getSourceAddressOffset(), sourcePort
+		);
 	}
 }

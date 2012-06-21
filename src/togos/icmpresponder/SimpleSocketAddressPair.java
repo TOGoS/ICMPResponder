@@ -1,5 +1,6 @@
 package togos.icmpresponder;
 
+import togos.blob.ByteChunk;
 import togos.blob.util.BlobUtil;
 
 public class SimpleSocketAddressPair implements SocketAddressPair
@@ -16,6 +17,16 @@ public class SimpleSocketAddressPair implements SocketAddressPair
 		this.ipVersion = ipVersion;
 		this.sBuf = sBuf; this.sOff = sOff; this.sPort = sPort;
 		this.dBuf = dBuf; this.dOff = dOff; this.dPort = dPort;
+	}
+	
+	public SimpleSocketAddressPair(
+		int ipVersion,
+		ByteChunk sAddr, int sPort,
+		ByteChunk dAddr, int dPort
+	) {
+		this( ipVersion,
+			sAddr.getBuffer(), sAddr.getOffset(), sPort,
+			dAddr.getBuffer(), dAddr.getOffset(), dPort );
 	}
 	
 	public static SimpleSocketAddressPair inverse( SocketAddressPair sap ) {

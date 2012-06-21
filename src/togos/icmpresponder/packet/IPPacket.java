@@ -1,5 +1,6 @@
 package togos.icmpresponder.packet;
 
+import togos.blob.ByteChunk;
 import togos.blob.SimpleByteChunk;
 
 public abstract class IPPacket extends SimpleByteChunk
@@ -12,10 +13,8 @@ public abstract class IPPacket extends SimpleByteChunk
 		return size < 1 ? 0 : (buffer[offset] >> 4) & 0xF;
 	}
 	
-	public abstract int getSourceAddressOffset();
-	public abstract int getSourceAddressSize();
-	public abstract int getDestinationAddressOffset();
-	public abstract int getDestinationAddressSize();
+	public abstract ByteChunk getSourceAddress();
+	public abstract ByteChunk getDestinationAddress();
 	public abstract int getPayloadProtocolNumber(); // a.k.a. 'next header' in IP6
 	public abstract int getHopLimit(); // a.k.a. TTL in IP4
 	public abstract int getPayloadOffset();

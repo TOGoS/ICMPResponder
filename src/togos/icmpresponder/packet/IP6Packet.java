@@ -1,5 +1,7 @@
 package togos.icmpresponder.packet;
 
+import togos.blob.ByteChunk;
+import togos.blob.SimpleByteChunk;
 import togos.icmpresponder.ByteUtil;
 
 public class IP6Packet extends IPPacket
@@ -15,10 +17,13 @@ public class IP6Packet extends IPPacket
 	}
 	
 	@Override public int getIpVersion() { return 6; }
-	@Override public int getSourceAddressOffset() { return offset + 8; }
-	@Override public int getSourceAddressSize() { return IP6_ADDRESS_SIZE; }
-	@Override public int getDestinationAddressOffset() { return offset + 24; }
-	@Override public int getDestinationAddressSize() { return IP6_ADDRESS_SIZE; }
+	
+	@Override public ByteChunk getSourceAddress() {
+		return new SimpleByteChunk( buffer, offset+8, IP6_ADDRESS_SIZE );
+	}
+	@Override public ByteChunk getDestinationAddress() {
+		return new SimpleByteChunk( buffer, offset+24, IP6_ADDRESS_SIZE );
+	}
 	@Override public int getPayloadProtocolNumber() { return buffer[offset+6] & 0xFF; }
 	@Override public int getHopLimit() { return buffer[offset+7] & 0xFF; }
 	@Override public int getPayloadOffset() { return 40; }

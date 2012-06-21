@@ -1,5 +1,6 @@
 package togos.icmpresponder.packet;
 
+import togos.blob.ByteChunk;
 import togos.blob.SimpleByteChunk;
 import togos.icmpresponder.ByteUtil;
 import togos.icmpresponder.InternetChecksum;
@@ -22,8 +23,9 @@ public class ICMP6Message extends SimpleByteChunk
 		this.icmpChecksum = checksum;
 	}
 	
-	public int getPayloadOffset() { return offset + ICMP6_HEADER_SIZE; }
-	public int getPayloadSize() { return size > ICMP6_HEADER_SIZE ? size - ICMP6_HEADER_SIZE : 0; }
+	public ByteChunk getPayload() {
+		return new SimpleByteChunk( buffer, offset + ICMP6_HEADER_SIZE, size > ICMP6_HEADER_SIZE ? size - ICMP6_HEADER_SIZE : 0 );
+	}
 	
 	public static ICMP6Message parse( IPPacket ipp ) {
 		byte[] buffer = ipp.getBuffer();
@@ -40,8 +42,8 @@ public class ICMP6Message extends SimpleByteChunk
 	
 	public static long calculateIcmp6Checksum( IP6Packet p ) {
 		byte[] data = new byte[40+p.payloadSize];
-		ByteUtil.copy( p.getBuffer(), p.getSourceAddressOffset()     , data,  0, 16 ); // Source address
-		ByteUtil.copy( p.getBuffer(), p.getDestinationAddressOffset(), data, 16, 16 ); // Destination address
+		ByteUtil.copy( p.getSourceAddress()     , data,  0 );
+		ByteUtil.copy( p.getDestinationAddress(), data, 16 );
 		ByteUtil.encodeInt32( p.payloadSize, data, 32 );
 		ByteUtil.encodeInt32( p.getPayloadProtocolNumber(), data, 36 );
 		ByteUtil.copy( p.getBuffer(), p.getPayloadOffset(), data, 40, p.payloadSize );
@@ -67,5 +69,17 @@ public class ICMP6Message extends SimpleByteChunk
 		int checksum = (int)calculateIcmp6Checksum(p);
 		ByteUtil.encodeInt16( checksum, p.buffer, IP6Packet.IP6_HEADER_SIZE + 2);
 		return new ICMP6Message( p.buffer, IP6Packet.IP6_ADDRESS_SIZE, payloadSize + 4, p, type, code, checksum);
+	}
+	
+	public static ICMP6Message create(
+		ByteChunk sourceAddress, ByteChunk destAddress,
+		int hopLimit, int type, int code, ByteChunk payload
+	) {
+		return create(
+			sourceAddress.getBuffer(), sourceAddress.getOffset(),
+			destAddress.getBuffer(), destAddress.getOffset(),
+			hopLimit, type, code,
+			payload.getBuffer(), payload.getOffset(), payload.getSize()
+		);
 	}
 }

@@ -1,5 +1,7 @@
 package togos.icmpresponder.packet;
 
+import togos.blob.ByteChunk;
+import togos.blob.SimpleByteChunk;
 
 public class InvalidIPPacket extends IPPacket
 {
@@ -14,10 +16,8 @@ public class InvalidIPPacket extends IPPacket
 		this( buffer, offset, size, "Invalid IP packet" );
 	}
 	
-	@Override public int getSourceAddressOffset() { return 0; }
-	@Override public int getSourceAddressSize() { return 0; }
-	@Override public int getDestinationAddressOffset() { return 0; }
-	@Override public int getDestinationAddressSize() { return 0; }
+	@Override public ByteChunk getSourceAddress() { return SimpleByteChunk.EMPTY; }
+	@Override public ByteChunk getDestinationAddress() { return SimpleByteChunk.EMPTY; }
 	@Override public int getPayloadProtocolNumber() { return 0; }
 	@Override public int getHopLimit() { return 0; }
 	@Override public int getPayloadOffset() { return 0; }

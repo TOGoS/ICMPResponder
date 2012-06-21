@@ -59,8 +59,8 @@ public class TCPSegment extends SimpleByteChunk
 		byte[] checksumBuffer = new byte[60 + m.optionsSize + m.dataSize];
 		// Not yet implemented for IP4 packets
 		IP6Packet ip6p = (IP6Packet)m.ipPacket;
-		ByteUtil.copy( ip6p.getBuffer(), ip6p.getSourceAddressOffset()       , checksumBuffer,  0, 16 );
-		ByteUtil.copy( ip6p.getBuffer(), ip6p.getDestinationAddressOffset()  , checksumBuffer, 16, 16 );
+		ByteUtil.copy( ip6p.getSourceAddress()       , checksumBuffer,  0 );
+		ByteUtil.copy( ip6p.getDestinationAddress()  , checksumBuffer, 16 );
 		ByteUtil.encodeInt32( TCP_HEADER_SIZE + m.optionsSize + m.dataSize, checksumBuffer,     32 ); // 'TCP Length'
 		ByteUtil.encodeInt32( TCP_PROTOCOL_NUMBER, checksumBuffer, 36 ); // 'next header'
 		
@@ -212,20 +212,18 @@ public class TCPSegment extends SimpleByteChunk
 	//// SocketAddressPair
 	
 	public SocketAddressPair getSocketAddressPair() {
-		byte[] buffer = ipPacket.getBuffer();
 		return new SimpleSocketAddressPair(
 			ipPacket.getIpVersion(),
-			buffer, ipPacket.getSourceAddressOffset(), sourcePort,
-			buffer, ipPacket.getDestinationAddressOffset(), destPort
+			ipPacket.getSourceAddress(), sourcePort,
+			ipPacket.getDestinationAddress(), destPort
 		);
 	}
 	
 	public SocketAddressPair getInverseAddressPair() {
-		byte[] buffer = ipPacket.getBuffer();
 		return new SimpleSocketAddressPair(
 			ipPacket.getIpVersion(),
-			buffer, ipPacket.getDestinationAddressOffset(), destPort,
-			buffer, ipPacket.getSourceAddressOffset(), sourcePort
+			ipPacket.getDestinationAddress(), destPort,
+			ipPacket.getSourceAddress(), sourcePort
 		);
 	}
 }

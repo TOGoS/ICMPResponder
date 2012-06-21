@@ -27,11 +27,12 @@ public class IPPacketHandler implements Sink<IPPacket>
 			out.println("  ICMP6 message");
 			out.println("    Type: "+m.icmpMessageType );
 			out.println("    Code: "+m.icmpMessageCode );
-			out.println("    Payload size: "+m.getPayloadSize());
+			out.println("    Payload size: "+m.getPayload().getSize());
 			out.println("    Checksum: "+m.icmpChecksum );
 			if( m.ipPacket instanceof IP6Packet ) {
 				out.println("    Calculated checksum: "+ICMP6Message.calculateIcmp6Checksum( (IP6Packet)m.ipPacket ));
 			}
+			break;
 		case( 6 ):
 			TCPSegment tm = TCPSegment.parse( p );
 			out.println( "  "+tm.toString() );
@@ -39,6 +40,7 @@ public class IPPacketHandler implements Sink<IPPacket>
 				out.println("    Calculated checksum: "+ICMP6Message.calculateIcmp6Checksum( (IP6Packet)tm.ipPacket ));
 				out.println("    Calculated checksum 2: "+TCPSegment.calculateChecksum( tm ));
 			}
+			break;
 		}
 	}
 	
@@ -46,8 +48,8 @@ public class IPPacketHandler implements Sink<IPPacket>
 		IPPacket p = IPPacket.parse( c.getBuffer(), c.getOffset(), c.getSize() );
 		if( p instanceof IP6Packet ) {
 			out.println("IP6 Packet");
-			out.println("  From: "+AddressUtil.formatIp6Address(p.getBuffer(), p.getSourceAddressOffset()));
-			out.println("  To:   "+AddressUtil.formatIp6Address(p.getBuffer(), p.getDestinationAddressOffset()));			
+			out.println("  From: "+AddressUtil.formatIp6Address(p.getSourceAddress()));
+			out.println("  To:   "+AddressUtil.formatIp6Address(p.getDestinationAddress()));			
 		} else {
 			out.println("Some non-IP6 packet");
 		}
@@ -86,9 +88,9 @@ public class IPPacketHandler implements Sink<IPPacket>
 			ICMP6Message m = ICMP6Message.parse( p );
 			if( m.icmpMessageType == 128 ) {
 				ICMP6Message reply = ICMP6Message.create(
-					p.buffer, p.getDestinationAddressOffset(),
-					p.buffer, p.getSourceAddressOffset(), 
-					64, 129, 0, m.getBuffer(), m.getPayloadOffset(), m.getPayloadSize()
+					p.getDestinationAddress(),
+					p.getSourceAddress(), 
+					64, 129, 0, m.getPayload()
 				);
 				tryReply( reply.ipPacket );
 			}

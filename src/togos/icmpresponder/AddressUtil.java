@@ -1,5 +1,7 @@
 package togos.icmpresponder;
 
+import togos.blob.ByteChunk;
+
 class AddressUtil
 {
 	public static String formatIp6Address( byte[] addy, int offset ) {
@@ -13,5 +15,9 @@ class AddressUtil
 			rez += Integer.toHexString(parts[i]);
 		}
 		return rez;
+	}
+	
+	public static String formatIp6Address( ByteChunk addy ) {
+		return formatIp6Address( addy.getBuffer(), addy.getOffset() );
 	}
 }

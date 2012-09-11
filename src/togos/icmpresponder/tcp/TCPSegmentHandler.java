@@ -223,5 +223,7 @@ public class TCPSegmentHandler implements Sink<TCPSegment>
 				SimpleByteChunk.EMPTY_BYTE_ARRAY, 0, 0
 			));
 		}
+		
+		// TODO: as long as there is data in the output buffers, register the session as needs checking up on.
 	}
 }

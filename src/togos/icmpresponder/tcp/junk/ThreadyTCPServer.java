@@ -1,4 +1,4 @@
-package togos.icmpresponder.tcp;
+package togos.icmpresponder.tcp.junk;
 
 import java.io.IOException;
 import java.io.OutputStream;

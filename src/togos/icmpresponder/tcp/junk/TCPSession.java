@@ -1,4 +1,4 @@
-package togos.icmpresponder.tcp;
+package togos.icmpresponder.tcp.junk;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -8,6 +8,7 @@ import togos.icmpresponder.ByteUtil;
 import togos.icmpresponder.Sink;
 import togos.icmpresponder.SocketAddressPair;
 import togos.icmpresponder.packet.TCPSegment;
+import togos.icmpresponder.tcp.TCPFlags;
 
 /**
  * This class can be used in either a multi-threaded (one thread pushing incoming packets

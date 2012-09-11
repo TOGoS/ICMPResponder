@@ -10,7 +10,8 @@ import togos.icmpresponder.packet.ICMP6Message;
 import togos.icmpresponder.packet.IP6Packet;
 import togos.icmpresponder.packet.IPPacket;
 import togos.icmpresponder.packet.TCPSegment;
-import togos.icmpresponder.tcp.ThreadyTCPServer;
+import togos.icmpresponder.tcp.TCPSegmentHandler;
+import togos.icmpresponder.tcp.junk.ThreadyTCPServer;
 
 public class IPPacketHandler implements Sink<IPPacket>
 {
@@ -70,9 +71,15 @@ public class IPPacketHandler implements Sink<IPPacket>
 		public void give(IPPacket s) {
 			tryReply(s);
 		};
-	}; 
+	};
+	Sink<TCPSegment> outgoingTcpSegmentSink = new Sink<TCPSegment>() {
+		public void give(TCPSegment s) {
+			tryReply(s.ipPacket);
+		};
+	};
 	
-	ThreadyTCPServer tcpServer = new ThreadyTCPServer( outgoingPacketSink );
+	TCPSegmentHandler tcpHandler = new TCPSegmentHandler( outgoingTcpSegmentSink );
+	ThreadyTCPServer tTcpServer = new ThreadyTCPServer( outgoingPacketSink );
 	
 	public void give( IPPacket p ) throws Exception {
 		System.err.print("Received: ");
@@ -82,7 +89,8 @@ public class IPPacketHandler implements Sink<IPPacket>
 		case( 6 ):
 			TCPSegment s = TCPSegment.parse( p );
 			if( !s.wellFormed ) return;
-			tcpServer.handleTcpSegment( s );
+			tcpHandler.give( s );
+			// tTcpServer.handleTcpSegment(s);
 			break;
 		case( 58 ):
 			ICMP6Message m = ICMP6Message.parse( p );

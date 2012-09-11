@@ -4,7 +4,8 @@ import togos.blob.util.BlobUtil;
 
 public class SimpleByteChunk implements ByteChunk
 {
-	public static final SimpleByteChunk EMPTY = new SimpleByteChunk(new byte[0],0,0);
+	public static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
+	public static final SimpleByteChunk EMPTY = new SimpleByteChunk(EMPTY_BYTE_ARRAY,0,0);
 	
 	/** @return a new SimpleByteChunk referencing a new buffer. */
 	public static SimpleByteChunk copyOf( byte[] buf, int offset, int size ) {

@@ -27,6 +27,7 @@ public class TCPSegmentHandler implements Sink<TCPSegment>
 	static class TCPOutputBuffer implements TCPDataWriter {
 		/** Data that has yet to be acknowledged by the other end */
 		protected byte[] buffer = SimpleByteChunk.EMPTY_BYTE_ARRAY;
+		protected boolean synAcked;
 		protected boolean closed, closeAcked;
 		/**
 		 * Ssequence number of the first unacknowledged byte in the stream.
@@ -84,8 +85,9 @@ public class TCPSegmentHandler implements Sink<TCPSegment>
 		 * Clear data that's been acknowledged received by the other end.
 		 */
 		protected void ack( int seq ) {
+			synAcked = true;
 			if( seq < sequence ) return;
-
+			
 			if( closed && seq == sequence + buffer.length + 1 ) {
 				buffer = SimpleByteChunk.EMPTY_BYTE_ARRAY;
 				sequence = seq;
@@ -105,6 +107,8 @@ public class TCPSegmentHandler implements Sink<TCPSegment>
 	}
 	
 	static class TCPSession {
+		// server is the 'source' address:
+		public final SocketAddressPair rap;
 		public final TCPDataHandler handler;
 		public final TCPOutputBuffer outBuf;
 		public int inputSequence;
@@ -114,9 +118,11 @@ public class TCPSegmentHandler implements Sink<TCPSegment>
 		 */
 		public boolean combine;
 		
-		public TCPSession( TCPDataHandler handler, int inSeq, int outSeq, boolean combine ) {
+		public TCPSession( SocketAddressPair outgoingAddressPair, TCPDataHandler handler, int inSeq, int outSeq, boolean combine ) {
+			assert( outgoingAddressPair != null );
 			assert( handler != null );
 			
+			this.rap = outgoingAddressPair;
 			this.handler = handler;
 			this.outBuf = new TCPOutputBuffer( outSeq );
 			this.inputSequence = inSeq;
@@ -158,6 +164,33 @@ public class TCPSegmentHandler implements Sink<TCPSegment>
 		return true;
 	}
 	
+	protected boolean sendSomeOutgoingData( TCPSession sess ) throws Exception {
+		SocketAddressPair rap = sess.rap;
+		boolean anythingSent = false;
+		if( sess.combine ) {
+			anythingSent = sendData( rap, sess.outBuf, !sess.outBuf.synAcked, true, true, sess.inputSequence ); 
+		} else {
+			if( !sess.outBuf.synAcked ) {
+				anythingSent |= sendData( rap, sess.outBuf, true, false, false, sess.inputSequence );
+			}
+			if( sess.outBuf.buffer.length > 0 ) {
+				anythingSent |= sendData( rap, sess.outBuf, false, true, false, sess.inputSequence );
+			}
+			if( sess.outBuf.buffer.length <= 1024 && sess.outBuf.closed && !sess.outBuf.closeAcked ) {
+				outputSegmentSink.give( TCPSegment.create(
+					rap,
+					sess.outBuf.sequence + sess.outBuf.buffer.length,
+					sess.inputSequence,
+					TCPFlags.FIN | TCPFlags.ACK,
+					WINDOW_SIZE,
+					SimpleByteChunk.EMPTY_BYTE_ARRAY, 0, 0
+				));
+				anythingSent = true;
+			}
+		}
+		return anythingSent;
+	}
+	
 	public void give( TCPSegment inSeg ) throws Exception {
 		int outSeq;
 		if( inSeg.isSyn() ) {
@@ -175,7 +208,7 @@ public class TCPSegmentHandler implements Sink<TCPSegment>
 				}
 			};
 			
-			sess = new TCPSession( handler, inSeg.sequenceNumber+1, outSeq, inSeg.dataSize > 0 );
+			sess = new TCPSession( inSeg.getInverseAddressPair(), handler, inSeg.sequenceNumber+1, outSeq, inSeg.dataSize > 0 );
 		} else if( sess == null ) {
 			// Invalid!
 			return;
@@ -197,32 +230,10 @@ public class TCPSegmentHandler implements Sink<TCPSegment>
 		if( inSeg.isAck() ) sess.outBuf.ack( inSeg.ackNumber );
 		
 		boolean ackRequired = inSeg.isSyn() || inSeg.isFin() || inSeg.hasData();
-		boolean synRequired = inSeg.isSyn();
 		// 'response address pair'
 		SocketAddressPair rap = inSeg.getInverseAddressPair();
 		
-		boolean ackSent = false;
-		if( sess.combine ) {
-			ackSent = sendData( rap, sess.outBuf, synRequired, true, true, sess.inputSequence ); 
-		} else {
-			if( synRequired ) {
-				ackSent |= sendData( rap, sess.outBuf, true, false, false, sess.inputSequence );
-			}
-			if( sess.outBuf.buffer.length > 0 ) {
-				ackSent |= sendData( rap, sess.outBuf, false, true, false, sess.inputSequence );
-			}
-			if( sess.outBuf.buffer.length <= 1024 && sess.outBuf.closed && !sess.outBuf.closeAcked ) {
-				outputSegmentSink.give( TCPSegment.create(
-					rap,
-					sess.outBuf.sequence + sess.outBuf.buffer.length,
-					sess.inputSequence,
-					TCPFlags.FIN | TCPFlags.ACK,
-					WINDOW_SIZE,
-					SimpleByteChunk.EMPTY_BYTE_ARRAY, 0, 0
-				));
-				ackSent = true;
-			}
-		}
+		boolean ackSent = sendSomeOutgoingData(sess);
 		
 		if( ackRequired && !ackSent ) {
 			outputSegmentSink.give( TCPSegment.create(

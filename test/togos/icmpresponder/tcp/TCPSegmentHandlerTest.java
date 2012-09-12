@@ -35,7 +35,7 @@ public class TCPSegmentHandlerTest extends TestCase
 		new byte[]{20,20,0,0,0,0,0,0,0,0,0,0,0,0,0,2}, 5 );
 
 	static final ByteChunk helloChunk = BlobUtil.byteChunk("Hello.");	
-
+	
 	// TODO: test with initial sequence numbers near Integer.MAX_VALUE
 	
 	public void testCombinedTransaction() throws Exception {

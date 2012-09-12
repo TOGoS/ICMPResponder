@@ -28,7 +28,15 @@ public class TCPSegmentHandler implements Sink<TCPSegment>
 		/** Data that has yet to be acknowledged by the other end */
 		protected byte[] buffer = SimpleByteChunk.EMPTY_BYTE_ARRAY;
 		protected boolean closed, closeAcked;
-		/** Sequence number at beginning of buffered data */
+		/**
+		 * Ssequence number of the first unacknowledged byte in the stream.
+		 * (SYN and FIN both count as one byte).
+		 * When the closing of this stream (FIN) has been acked,
+		 * closeAcked will be true, the buffer will be empty
+		 * and this should be one 'past the end of the empty buffer'.
+		 * 
+		 * If there is data in buffer, the fist byte has this sequence number.
+		 **/
 		protected int sequence = 0;
 		
 		public TCPOutputBuffer( int sendSequence ) {
@@ -112,6 +120,7 @@ public class TCPSegmentHandler implements Sink<TCPSegment>
 			this.handler = handler;
 			this.outBuf = new TCPOutputBuffer( outSeq );
 			this.inputSequence = inSeq;
+			this.combine = combine;
 		}
 	}
 	
@@ -131,7 +140,7 @@ public class TCPSegmentHandler implements Sink<TCPSegment>
 		assert( !includeFinIfReached || includeData );
 		
 		int payloadSize = includeData ? Math.min( buf.buffer.length, 1024 ) : 0;
-		boolean includeFin = includeFinIfReached && payloadSize == buf.buffer.length && buf.closed;
+		boolean includeFin = includeFinIfReached && payloadSize == buf.buffer.length && buf.closed && !buf.closeAcked;
 		
 		if( !includeSyn && payloadSize == 0 && !includeFin ) {
 			// then send nothing!
@@ -185,6 +194,8 @@ public class TCPSegmentHandler implements Sink<TCPSegment>
 		sess.handler.handleData( inSeg.getBuffer(), inSeg.dataOffset, inSeg.dataSize, inSeg.isFin(), sess.outBuf );
 		sess.inputSequence = inSeg.sequenceNumber + inSeg.getSequenceDelta();
 		
+		if( inSeg.isAck() ) sess.outBuf.ack( inSeg.ackNumber );
+		
 		boolean ackRequired = inSeg.isSyn() || inSeg.isFin() || inSeg.hasData();
 		boolean synRequired = inSeg.isSyn();
 		// 'response address pair'
@@ -200,7 +211,7 @@ public class TCPSegmentHandler implements Sink<TCPSegment>
 			if( sess.outBuf.buffer.length > 0 ) {
 				ackSent |= sendData( rap, sess.outBuf, false, true, false, sess.inputSequence );
 			}
-			if( sess.outBuf.buffer.length <= 1024 && sess.outBuf.closed ) {
+			if( sess.outBuf.buffer.length <= 1024 && sess.outBuf.closed && !sess.outBuf.closeAcked ) {
 				outputSegmentSink.give( TCPSegment.create(
 					rap,
 					sess.outBuf.sequence + sess.outBuf.buffer.length,
@@ -224,6 +235,9 @@ public class TCPSegmentHandler implements Sink<TCPSegment>
 			));
 		}
 		
-		// TODO: as long as there is data in the output buffers, register the session as needs checking up on.
+		// TODO: as long as there is data in the output buffers or unacked fins,
+		// register the session as needs checking up on.
+		
+		// TODO: Remove closed sessions when both ends are closed and fins have been acknowledged
 	}
 }

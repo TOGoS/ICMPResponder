@@ -29,6 +29,16 @@ public class SimpleSocketAddressPair implements SocketAddressPair
 			dAddr.getBuffer(), dAddr.getOffset(), dPort );
 	}
 	
+	public SimpleSocketAddressPair(
+		int ipVersion,
+		byte[] sAddr, int sPort,
+		byte[] dAddr, int dPort
+	) {
+		this( ipVersion,
+			sAddr, 0, sPort,
+			dAddr, 0, dPort );
+	}
+
 	public static SimpleSocketAddressPair inverse( SocketAddressPair sap ) {
 		return new SimpleSocketAddressPair(
 			sap.getIpVersion(),
